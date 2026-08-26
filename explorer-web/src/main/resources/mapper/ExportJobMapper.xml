@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.localexplorer.mapper.ExportJobMapper">
+
+    <insert id="insert">
+        insert into export_job
+        (job_id, request_id, export_type, file_format, query_snapshot, status, progress,
+         total_rows, processed_rows, retry_count, next_retry_at, operator_id,
+         create_time, update_time)
+        values
+        (#{jobId}, #{requestId}, #{exportType}, #{fileFormat}, #{querySnapshot}, #{status}, #{progress},
+         #{totalRows}, #{processedRows}, #{retryCount}, #{nextRetryAt}, #{operatorId},
+         #{createTime}, #{updateTime})
+    </insert>
+
+    <select id="getByJobId" resultType="com.localexplorer.entity.ExportJob">
+        select * from export_job where job_id = #{jobId}
+    </select>
+
+    <select id="getByOperatorAndRequestId" resultType="com.localexplorer.entity.ExportJob">
+        select * from export_job where operator_id = #{operatorId} and request_id = #{requestId}
+    </select>
+
+    <select id="pageQuery" resultType="com.localexplorer.vo.ExportJobVO">
+        select j.job_id, j.request_id, j.export_type, j.file_format, j.status, j.progress,
+               j.total_rows, j.processed_rows, j.file_name, j.file_size, j.checksum,
+               j.retry_count, j.error_code, j.error_message, j.operator_id, e.name as operator_name,
+               j.started_at, j.finished_at, j.expires_at, j.create_time, j.update_time
+        from export_job j
+        <choose>
+            <when test="visibleOperatorId != null">force index (idx_export_operator_list)</when>
+            <otherwise>force index (idx_export_admin_list)</otherwise>
+        </choose>
+        left join employee e on e.id = j.operator_id
+        <where>
+            <if test="visibleOperatorId != null">and j.operator_id = #{visibleOperatorId}</if>
+            <if test="query.exportType != null and query.exportType != ''">and j.export_type = #{query.exportType}</if>
+            <if test="query.fileFormat != null and query.fileFormat != ''">and j.file_format = #{query.fileFormat}</if>
+            <if test="query.status != null and query.status != ''">and j.status = #{query.status}</if>
+            <if test="query.operatorId != null">and j.operator_id = #{query.operatorId}</if>
+            <if test="query.startTime != null">and j.create_time &gt;= #{query.startTime}</if>
+            <if test="query.endTime != null">and j.create_time &lt;= #{query.endTime}</if>
+        </where>
+        order by j.create_time desc, j.job_id desc
+    </select>
+
+    <select id="countActiveByOperator" resultType="long">
+        select count(*) from export_job
+        where operator_id = #{operatorId} and status in ('PENDING', 'RUNNING')
+    </select>
+
+    <select id="findReadyJobIds" resultType="string">
+        select job_id from (
+            select job_id, next_retry_at as ready_at from export_job force index (idx_export_ready)
+            where status = 'PENDING' and next_retry_at &lt;= #{now}
+            union all
+            select job_id, lease_until as ready_at from export_job force index (idx_export_lease)
+            where status = 'RUNNING' and lease_until &lt;= #{now}
+        ) ready_jobs
+        order by ready_at, job_id
+        limit #{limit}
+    </select>
+
+    <update id="claim">
+        update export_job
+        set status = 'RUNNING', lease_owner = #{leaseOwner}, lease_until = #{leaseUntil},
+            progress = 0, processed_rows = 0, started_at = coalesce(started_at, #{now}), update_time = #{now}
+        where job_id = #{jobId}
+          and ((status = 'PENDING' and next_retry_at &lt;= #{now})
+            or (status = 'RUNNING' and lease_until &lt;= #{now}))
+    </update>
+
+    <update id="heartbeat">
+        update export_job set lease_until = #{leaseUntil}, update_time = #{now}
+        where job_id = #{jobId} and status = 'RUNNING' and lease_owner = #{leaseOwner}
+    </update>
+
+    <update id="updateProgress">
+        update export_job set processed_rows = #{processedRows}, progress = #{progress},
+            lease_until = #{leaseUntil}, update_time = #{now}
+        where job_id = #{jobId} and status = 'RUNNING' and lease_owner = #{leaseOwner}
+    </update>
+
+    <update id="markSucceeded">
+        update export_job
+        set status = 'SUCCEEDED', progress = 100, processed_rows = #{processedRows},
+            file_path = #{filePath}, file_name = #{fileName}, file_size = #{fileSize}, checksum = #{checksum},
+            lease_owner = null, lease_until = null, error_code = null, error_message = null,
+            finished_at = #{finishedAt}, expires_at = #{expiresAt}, update_time = #{finishedAt}
+        where job_id = #{jobId} and status = 'RUNNING' and lease_owner = #{leaseOwner}
+    </update>
+
+    <update id="markRetry">
+        update export_job
+        set status = 'PENDING', retry_count = #{retryCount}, next_retry_at = #{nextRetryAt},
+            lease_owner = null, lease_until = null, error_code = #{errorCode}, error_message = #{errorMessage},
+            update_time = #{now}
+        where job_id = #{jobId} and status = 'RUNNING' and lease_owner = #{leaseOwner}
+    </update>
+
+    <update id="markFailed">
+        update export_job
+        set status = 'FAILED', retry_count = #{retryCount}, lease_owner = null, lease_until = null,
+            error_code = #{errorCode}, error_message = #{errorMessage}, finished_at = #{now}, update_time = #{now}
+        where job_id = #{jobId} and status = 'RUNNING' and lease_owner = #{leaseOwner}
+    </update>
+
+    <update id="cancel">
+        update export_job
+        set status = 'CANCELED', lease_owner = null, lease_until = null,
+            error_code = null, error_message = null, finished_at = #{now}, update_time = #{now}
+        where job_id = #{jobId} and status in ('PENDING', 'RUNNING')
+    </update>
+
+    <update id="retryFailed">
+        update export_job
+        set status = 'PENDING', progress = 0, processed_rows = 0, retry_count = 0,
+            next_retry_at = #{now}, lease_owner = null, lease_until = null,
+            error_code = null, error_message = null, started_at = null, finished_at = null,
+            update_time = #{now}
+        where job_id = #{jobId} and status = 'FAILED'
+    </update>
+
+    <select id="findExpiredJobIds" resultType="string">
+        select job_id from export_job
+        where status = 'SUCCEEDED' and expires_at &lt;= #{now}
+        order by expires_at, job_id
+        limit #{limit}
+    </select>
+
+    <select id="findFilesToDelete" resultType="string">
+        select job_id from export_job
+        where (status = 'SUCCEEDED' and expires_at &lt;= #{now})
+           or (status = 'EXPIRED' and file_path is not null)
+        order by expires_at, job_id
+        limit #{limit}
+    </select>
+
+    <select id="listReferencedFilePaths" resultType="string">
+        select file_path from export_job where file_path is not null and status = 'SUCCEEDED'
+    </select>
+
+    <update id="markExpired">
+        update export_job set status = 'EXPIRED', update_time = #{now}
+        where job_id = #{jobId} and status = 'SUCCEEDED' and expires_at &lt;= #{now}
+    </update>
+
+    <update id="clearExpiredFile">
+        update export_job set file_path = null, update_time = #{now}
+        where job_id = #{jobId} and status = 'EXPIRED'
+    </update>
+
+    <select id="stats" resultType="com.localexplorer.vo.ExportJobStatsVO">
+        select
+          coalesce(sum(case when status = 'PENDING' then 1 else 0 end), 0) as pending,
+          coalesce(sum(case when status = 'RUNNING' then 1 else 0 end), 0) as running,
+          coalesce(sum(case when status = 'SUCCEEDED' then 1 else 0 end), 0) as succeeded,
+          coalesce(sum(case when status = 'FAILED' then 1 else 0 end), 0) as failed,
+          coalesce(sum(case when status = 'CANCELED' then 1 else 0 end), 0) as canceled,
+          coalesce(sum(case when status = 'EXPIRED' then 1 else 0 end), 0) as expired,
+          coalesce(sum(case when status = 'RUNNING' and lease_until &lt;= #{now} then 1 else 0 end), 0) as expired_leases,
+          case when sum(case when status in ('SUCCEEDED', 'FAILED') then 1 else 0 end) = 0 then 0
+               else round(100 * sum(case when status = 'SUCCEEDED' then 1 else 0 end) /
+                    sum(case when status in ('SUCCEEDED', 'FAILED') then 1 else 0 end), 2) end as success_rate,
+          (select f.job_id from export_job f where f.status = 'FAILED'
+             order by f.finished_at desc, f.job_id desc limit 1) as recent_failure_job_id,
+          (select f.export_type from export_job f where f.status = 'FAILED'
+             order by f.finished_at desc, f.job_id desc limit 1) as recent_failure_type,
+          (select f.error_code from export_job f where f.status = 'FAILED'
+             order by f.finished_at desc, f.job_id desc limit 1) as recent_failure_error_code,
+          (select f.finished_at from export_job f where f.status = 'FAILED'
+             order by f.finished_at desc, f.job_id desc limit 1) as recent_failure_time
+        from export_job
+    </select>
+
+    <select id="countFailed" resultType="long">
+        select count(*) from export_job where status = 'FAILED'
+    </select>
+
+    <select id="countExpiredLeases" resultType="long">
+        select count(*) from export_job where status = 'RUNNING' and lease_until &lt;= #{now}
+    </select>
+</mapper>

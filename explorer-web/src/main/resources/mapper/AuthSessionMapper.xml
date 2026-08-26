@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.localexplorer.mapper.AuthSessionMapper">
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into auth_session
+        (session_id, token_family_id, principal_type, principal_id, refresh_token_hash, status,
+         expires_at, last_used_at, revoked_at, revoke_reason, ip_hash, device_summary, create_time, update_time)
+        values
+        (#{sessionId}, #{tokenFamilyId}, #{principalType}, #{principalId}, #{refreshTokenHash}, #{status},
+         #{expiresAt}, #{lastUsedAt}, #{revokedAt}, #{revokeReason}, #{ipHash}, #{deviceSummary},
+         #{createTime}, #{updateTime})
+    </insert>
+
+    <select id="getByRefreshTokenHash" resultType="com.localexplorer.entity.AuthSession">
+        select * from auth_session where refresh_token_hash = #{refreshTokenHash}
+    </select>
+
+    <select id="getBySessionId" resultType="com.localexplorer.entity.AuthSession">
+        select * from auth_session where session_id = #{sessionId}
+    </select>
+
+    <update id="rotateIfActive">
+        update auth_session set status = 'ROTATED', last_used_at = #{now}, update_time = #{now}
+        where session_id = #{sessionId} and status = 'ACTIVE' and expires_at &gt; #{now}
+    </update>
+
+    <update id="revokeSession">
+        update auth_session set status = 'REVOKED', revoked_at = #{now}, revoke_reason = #{reason}, update_time = #{now}
+        where session_id = #{sessionId} and status = 'ACTIVE'
+    </update>
+
+    <update id="revokeFamily">
+        update auth_session set status = 'REVOKED', revoked_at = #{now}, revoke_reason = #{reason}, update_time = #{now}
+        where token_family_id = #{familyId} and status in ('ACTIVE', 'ROTATED')
+    </update>
+
+    <update id="revokeAll">
+        update auth_session set status = 'REVOKED', revoked_at = #{now}, revoke_reason = #{reason}, update_time = #{now}
+        where principal_type = #{principalType} and principal_id = #{principalId} and status = 'ACTIVE'
+    </update>
+
+    <update id="expireActive">
+        update auth_session set status = 'EXPIRED', update_time = #{now}
+        where status = 'ACTIVE' and expires_at &lt;= #{now}
+    </update>
+
+    <delete id="deleteTerminalBefore">
+        delete from auth_session where status in ('ROTATED', 'REVOKED', 'EXPIRED') and update_time &lt; #{cutoff}
+        order by id limit #{limit}
+    </delete>
+
+    <select id="stats" resultType="com.localexplorer.vo.AuthSessionStatsVO">
+        select
+          sum(case when status = 'ACTIVE' then 1 else 0 end) active,
+          sum(case when status = 'ROTATED' then 1 else 0 end) rotated,
+          sum(case when status = 'REVOKED' then 1 else 0 end) revoked,
+          sum(case when status = 'EXPIRED' then 1 else 0 end) expired
+        from auth_session
+    </select>
+</mapper>

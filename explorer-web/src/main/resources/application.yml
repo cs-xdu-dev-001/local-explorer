@@ -1,0 +1,129 @@
+server:
+  port: 8080
+
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  main:
+    allow-circular-references: true
+  datasource:
+    druid:
+      driver-class-name: ${explorer.datasource.driver-class-name}
+      url: jdbc:mysql://${explorer.datasource.host}:${explorer.datasource.port}/${explorer.datasource.database}?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&zeroDateTimeBehavior=convertToNull&useSSL=false&allowPublicKeyRetrieval=true
+      username: ${explorer.datasource.username}
+      password: ${explorer.datasource.password}
+      validation-query: SELECT 1
+      validation-query-timeout: 2
+      test-while-idle: true
+      time-between-eviction-runs-millis: 60000
+  redis:
+    host: ${explorer.redis.host}
+    port: ${explorer.redis.port}
+    database: ${explorer.redis.database}
+    connect-timeout: 200ms
+    timeout: 200ms
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.localexplorer.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [requestId=%X{requestId:-no-request} batchId=%X{batchId:-no-batch}] %logger{36} - %msg%n"
+  level:
+    com:
+      localexplorer:
+        mapper: info
+        service: info
+        controller: info
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-components: always
+      show-details: never
+      status:
+        order: DOWN,OUT_OF_SERVICE,DEGRADED,UP,UNKNOWN
+        http-mapping:
+          degraded: 200
+  health:
+    redis:
+      enabled: false
+
+explorer:
+  jwt:
+    admin-secret-key: ${JWT_ADMIN_SECRET:local-explorer-admin-dev-secret}
+    admin-ttl: ${JWT_ADMIN_TTL:1800000}
+    admin-token-name: token
+    user-secret-key: ${JWT_USER_SECRET:local-explorer-user-dev-secret}
+    user-ttl: ${JWT_USER_TTL:1800000}
+    user-token-name: authentication
+  auth:
+    refresh-ttl-millis: ${AUTH_REFRESH_TTL_MILLIS:604800000}
+    admin-cookie-name: ${AUTH_ADMIN_COOKIE_NAME:LX_ADMIN_REFRESH}
+    user-cookie-name: ${AUTH_USER_COOKIE_NAME:LX_USER_REFRESH}
+    cookie-secure: ${AUTH_COOKIE_SECURE:false}
+    fingerprint-secret: ${AUTH_FINGERPRINT_SECRET:local-explorer-dev-fingerprint-secret}
+    trusted-proxy-enabled: ${AUTH_TRUSTED_PROXY_ENABLED:false}
+    allowed-origins: ${AUTH_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+    login-failure-limit: ${AUTH_LOGIN_FAILURE_LIMIT:5}
+    login-window-seconds: ${AUTH_LOGIN_WINDOW_SECONDS:600}
+    login-lock-seconds: ${AUTH_LOGIN_LOCK_SECONDS:900}
+    cleanup-batch-size: ${AUTH_CLEANUP_BATCH_SIZE:200}
+    retention-days: ${AUTH_SESSION_RETENTION_DAYS:30}
+    replay-grace-millis: ${AUTH_REPLAY_GRACE_MILLIS:2000}
+  hot-cache:
+    enabled: ${HOT_CACHE_ENABLED:true}
+    redis-enabled: ${HOT_CACHE_REDIS_ENABLED:true}
+    schema-version: ${HOT_CACHE_SCHEMA_VERSION:1}
+    l1-maximum-size: ${HOT_CACHE_L1_MAXIMUM_SIZE:2000}
+    l1-ttl-millis: ${HOT_CACHE_L1_TTL_MILLIS:20000}
+    l2-ttl-millis: ${HOT_CACHE_L2_TTL_MILLIS:600000}
+    null-ttl-millis: ${HOT_CACHE_NULL_TTL_MILLIS:30000}
+    stale-ttl-millis: ${HOT_CACHE_STALE_TTL_MILLIS:120000}
+    ttl-jitter-millis: ${HOT_CACHE_TTL_JITTER_MILLIS:60000}
+    lock-lease-millis: ${HOT_CACHE_LOCK_LEASE_MILLIS:3000}
+    lock-wait-millis: ${HOT_CACHE_LOCK_WAIT_MILLIS:500}
+    lock-poll-millis: ${HOT_CACHE_LOCK_POLL_MILLIS:25}
+    single-flight-wait-millis: ${HOT_CACHE_SINGLE_FLIGHT_WAIT_MILLIS:3000}
+    redis-circuit-open-millis: ${HOT_CACHE_REDIS_CIRCUIT_OPEN_MILLIS:1000}
+    recovery-job-enabled: ${HOT_CACHE_RECOVERY_JOB_ENABLED:true}
+    recovery-delay-millis: ${HOT_CACHE_RECOVERY_DELAY_MILLIS:2000}
+    key-prefix: ${HOT_CACHE_KEY_PREFIX:lx:hot:v1}
+    invalidation-channel: ${HOT_CACHE_INVALIDATION_CHANNEL:lx:hot:v1:invalidate}
+  order:
+    pending-timeout-minutes: ${ORDER_PENDING_TIMEOUT_MINUTES:30}
+  export:
+    storage-root: ${EXPORT_STORAGE_ROOT:./runtime/exports}
+    batch-size: ${EXPORT_BATCH_SIZE:500}
+    scan-batch-size: ${EXPORT_SCAN_BATCH_SIZE:10}
+    max-attempts: ${EXPORT_MAX_ATTEMPTS:4}
+    base-retry-seconds: ${EXPORT_BASE_RETRY_SECONDS:10}
+    lease-seconds: ${EXPORT_LEASE_SECONDS:60}
+    heartbeat-seconds: ${EXPORT_HEARTBEAT_SECONDS:20}
+    max-active-per-operator: ${EXPORT_MAX_ACTIVE_PER_OPERATOR:3}
+    max-range-days: ${EXPORT_MAX_RANGE_DAYS:366}
+    max-rows: ${EXPORT_MAX_ROWS:100000}
+    max-file-bytes: ${EXPORT_MAX_FILE_BYTES:52428800}
+    max-runtime-seconds: ${EXPORT_MAX_RUNTIME_SECONDS:900}
+    file-ttl-hours: ${EXPORT_FILE_TTL_HOURS:24}
+    scan-delay-ms: ${EXPORT_SCAN_DELAY_MS:3000}
+    cleanup-delay-ms: ${EXPORT_CLEANUP_DELAY_MS:60000}
+    worker-threads: ${EXPORT_WORKER_THREADS:2}
+    worker-queue-capacity: ${EXPORT_WORKER_QUEUE_CAPACITY:20}
+    snapshot-secret: ${EXPORT_SNAPSHOT_SECRET:local-explorer-export-snapshot-dev-secret}
+  jobs:
+    enabled: false
+    expiration-delay-ms: ${ORDER_EXPIRATION_DELAY_MS:30000}
+    outbox-delay-ms: ${OUTBOX_DELAY_MS:5000}
+    batch-size: ${RELIABILITY_BATCH_SIZE:50}
+    outbox-max-attempts: ${OUTBOX_MAX_ATTEMPTS:5}
+    outbox-base-delay-seconds: ${OUTBOX_BASE_DELAY_SECONDS:10}
+    outbox-lock-seconds: ${OUTBOX_LOCK_SECONDS:60}
+    auth-session-cleanup-delay-ms: ${AUTH_SESSION_CLEANUP_DELAY_MS:3600000}

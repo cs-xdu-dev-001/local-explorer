@@ -1,0 +1,92 @@
+site_name: 本地生活探店与商家管理平台
+site_description: local-explorer-server的运行、架构、可靠性与测试文档
+site_url: https://cs-xdu-dev-001.github.io/local-explorer/
+repo_url: https://github.com/cs-xdu-dev-001/local-explorer
+repo_name: cs-xdu-dev-001/local-explorer
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: zh
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: 切换到深色模式
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: 切换到浅色模式
+
+plugins:
+  - search:
+      lang:
+        - zh
+        - en
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra_javascript:
+  - path: javascripts/mermaid.mjs
+    type: module
+
+nav:
+  - 首页: index.md
+  - 快速开始:
+      - 本地运行: usage.md
+      - 测试与验证: TESTING.md
+      - 测试报告: TEST_REPORT.md
+      - 集成测试: INTEGRATION_TESTING.md
+  - 架构设计:
+      - 系统架构: architecture.md
+      - 后端工程设计: BACKEND_DESIGN.md
+      - 数据库设计: DATABASE_DESIGN.md
+      - 接口与错误码: API_AND_ERRORS.md
+      - 可观测性: OBSERVABILITY.md
+  - 可靠性与安全:
+      - 订单可靠性: ORDER_RELIABILITY.md
+      - 一致性与并发: CONSISTENCY.md
+      - 认证与会话安全: AUTH_SESSION_SECURITY.md
+      - 异步导出: ASYNC_EXPORT.md
+  - 缓存:
+      - 缓存与Redis: CACHE_AND_REDIS.md
+      - 公共浏览热路径: CACHE_HOT_PATH.md
+  - 展示与面试:
+      - 面试说明: INTERVIEW_NOTES.md
+      - 界面截图: screenshots/README.md
+
+copyright: Copyright &copy; local-explorer-server contributors

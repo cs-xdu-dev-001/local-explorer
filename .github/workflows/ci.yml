@@ -1,0 +1,277 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 8
+          cache: maven
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: explorer-web/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: explorer-web/frontend
+        run: npm ci
+
+      - name: Run backend tests
+        run: ./mvnw test
+
+      - name: Run Node contract tests
+        run: node --test explorer-web/src/test/js/*.test.cjs
+
+      - name: Audit frontend dependencies
+        working-directory: explorer-web/frontend
+        run: npm audit --audit-level=high
+
+      - name: Build frontend
+        working-directory: explorer-web/frontend
+        run: npm run build
+
+      - name: Install Playwright Chromium
+        working-directory: explorer-web/frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run notification Playwright smoke
+        working-directory: explorer-web/frontend
+        run: npm run smoke:notification
+
+      - name: Upload notification screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: notification-playwright-screenshots
+          path: |
+            docs/screenshots/notification-desktop.png
+            docs/screenshots/notification-mobile.png
+
+      - name: Upload JaCoCo report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: explorer-web/target/site/jacoco/
+
+      - name: Upload unit test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: explorer-web/target/surefire-reports/
+
+  integration-test:
+    runs-on: ubuntu-latest
+    needs: test
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: 1234
+          MYSQL_DATABASE: local_explorer
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -p1234"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 8
+          cache: maven
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: explorer-web/frontend/package-lock.json
+
+      - name: Install frontend browser dependencies
+        working-directory: explorer-web/frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Build frontend for runtime smoke
+        working-directory: explorer-web/frontend
+        run: npm run build
+
+      - name: Initialize smoke database
+        run: mysql --protocol=TCP -h 127.0.0.1 -P 3306 -uroot -p1234 < docs/local-explorer-init.sql
+
+      - name: Run Testcontainers MySQL and Redis integration tests
+        run: ./mvnw -Pintegration-test verify
+
+      - name: Start reliability backend
+        env:
+          SPRING_PROFILES_ACTIVE: dev
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: local_explorer
+          DB_USERNAME: root
+          DB_PASSWORD: 1234
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
+          ORDER_PENDING_TIMEOUT_MINUTES: 1
+          ORDER_EXPIRATION_DELAY_MS: 1000
+          OUTBOX_DELAY_MS: 500
+          AUTH_REPLAY_GRACE_MILLIS: 200
+          EXPORT_SCAN_DELAY_MS: 15000
+          EXPORT_MAX_FILE_BYTES: 2048
+        run: |
+          nohup java -jar explorer-web/target/local-explorer-web-1.0-SNAPSHOT.jar > reliability-backend.log 2>&1 &
+          echo $! > reliability-backend.pid
+
+      - name: Wait for reliability backend
+        run: |
+          for attempt in {1..60}; do
+            if curl --fail --silent http://localhost:8080/actuator/health > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat reliability-backend.log
+          exit 1
+
+      - name: Verify runtime surfaces
+        run: |
+          curl --fail --silent http://localhost:8080/actuator/health > /dev/null
+          curl --fail --silent http://localhost:8080/doc.html > /dev/null
+          curl --fail --silent --get --data-urlencode 'group=商家后台接口' http://localhost:8080/v2/api-docs > /dev/null
+          curl --fail --silent http://localhost:8080/client/index.html > /dev/null
+
+      - name: Run cache hot-path performance smoke
+        env:
+          CACHE_SMOKE_REQUESTS: 200
+          CACHE_SMOKE_CONCURRENCY: 25
+        run: node scripts/smoke-cache-performance.cjs
+
+      - name: Run real order reliability smoke
+        env:
+          RELIABILITY_SMOKE_TIMEOUT_MS: 120000
+        run: node scripts/smoke-order-reliability.cjs
+
+      - name: Run real authentication API smoke
+        env:
+          AUTH_REPLAY_WAIT_MS: 350
+        run: node scripts/smoke-auth-session.cjs
+
+      - name: Run real authentication Playwright smoke
+        working-directory: explorer-web/frontend
+        run: npm run smoke:auth
+
+      - name: Run real asynchronous export Playwright smoke
+        env:
+          EXPORT_EXPECT_REAL_FAILURE: "true"
+        working-directory: explorer-web/frontend
+        run: npm run smoke:export
+
+      - name: Run export failure and responsive Demo Playwright smoke
+        working-directory: explorer-web/frontend
+        run: npm run smoke:export:demo -- --base=http://localhost:8080
+
+      - name: Upload export Playwright screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: export-playwright-screenshots
+          path: |
+            docs/screenshots/export-jobs-real-desktop.png
+            docs/screenshots/export-jobs-real-mobile.png
+            docs/screenshots/export-jobs-demo-desktop.png
+            docs/screenshots/export-jobs-demo-mobile.png
+
+      - name: Upload export performance evidence and samples
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: export-performance-and-samples
+          path: |
+            explorer-web/target/export-performance/export-performance.json
+            explorer-web/target/export-performance/real-mysql-smoke.json
+            explorer-web/target/export-performance/export-100000.csv
+            explorer-web/target/export-performance/export-100000.xlsx
+            explorer-web/target/export-performance/real-mysql-10000.csv
+            explorer-web/target/export-performance/real-mysql-10000.xlsx
+
+      - name: Upload authentication screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: authentication-playwright-screenshots
+          path: |
+            docs/screenshots/auth-admin-desktop.png
+            docs/screenshots/auth-user-mobile.png
+
+      - name: Upload reliability backend log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reliability-backend-log
+          path: reliability-backend.log
+
+      - name: Upload cache performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cache-performance-report
+          path: explorer-web/target/cache-performance-report.json
+
+      - name: Stop reliability backend
+        if: always()
+        run: |
+          if [ -f reliability-backend.pid ]; then
+            kill "$(cat reliability-backend.pid)" || true
+          fi
+
+      - name: Upload integration JaCoCo report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-it-report
+          path: explorer-web/target/site/jacoco-it/
+
+      - name: Upload integration test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-reports
+          path: |
+            explorer-web/target/surefire-reports/
+            explorer-web/target/failsafe-reports/

@@ -1,0 +1,26 @@
+{
+  "name": "local-explorer-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "smoke:notification": "node ../../scripts/smoke-notification-playwright.cjs",
+    "smoke:auth": "node ../../scripts/smoke-auth-playwright.cjs",
+    "smoke:export": "node ../../scripts/smoke-export-jobs-playwright.cjs",
+    "smoke:export:demo": "node ../../scripts/smoke-export-jobs-playwright.cjs --demo",
+    "smoke:cache-performance": "node ../../scripts/smoke-cache-performance.cjs"
+  },
+  "dependencies": {
+    "lucide-react": "^0.511.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@vitejs/plugin-react": "^5.0.0",
+    "vite": "^7.0.0"
+  }
+}

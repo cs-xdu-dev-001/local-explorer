@@ -1,0 +1,17 @@
+**/target/
+.idea
+.vscode/
+*.iml
+*.class
+*.log
+.m2/
+.mvn/wrapper/apache-maven-*/
+.mvn/wrapper/apache-maven-*-bin.zip
+.superpowers/
+tmp-run-logs/
+node_modules/
+**/node_modules/
+coverage/
+/site/
+/.venv-docs/
+explorer-web/src/main/resources/application-dev.local.yml

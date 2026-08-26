@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.localexplorer.mapper.UserNotificationMapper">
+
+    <insert id="insertIgnore" useGeneratedKeys="true" keyProperty="id">
+        insert ignore into user_notification
+        (event_id, user_id, order_id, notification_type, title, content, read_status, read_time, create_time)
+        values
+        (#{eventId}, #{userId}, #{orderId}, #{notificationType}, #{title}, #{content},
+         #{readStatus}, #{readTime}, #{createTime})
+    </insert>
+
+    <select id="pageQuery" resultType="com.localexplorer.entity.UserNotification">
+        select * from user_notification
+        where user_id = #{userId}
+        order by create_time desc, id desc
+    </select>
+
+    <select id="countUnread" resultType="long">
+        select count(*) from user_notification where user_id = #{userId} and read_status = 0
+    </select>
+
+    <update id="markRead">
+        update user_notification
+        set read_status = 1, read_time = #{now}
+        where id = #{id} and user_id = #{userId} and read_status = 0
+    </update>
+
+    <update id="markAllRead">
+        update user_notification
+        set read_status = 1, read_time = #{now}
+        where user_id = #{userId} and read_status = 0
+    </update>
+
+    <select id="getById" resultType="com.localexplorer.entity.UserNotification">
+        select * from user_notification where id = #{id}
+    </select>
+</mapper>

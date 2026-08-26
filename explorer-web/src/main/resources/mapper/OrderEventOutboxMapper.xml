@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.localexplorer.mapper.OrderEventOutboxMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into order_event_outbox
+        (event_id, event_type, aggregate_id, user_id, payload, status, retry_count,
+         next_retry_at, locked_until, lock_token, last_error, processed_at, create_time, update_time)
+        values
+        (#{eventId}, #{eventType}, #{aggregateId}, #{userId}, #{payload}, #{status}, #{retryCount},
+         #{nextRetryAt}, #{lockedUntil}, #{lockToken}, #{lastError}, #{processedAt}, #{createTime}, #{updateTime})
+    </insert>
+
+    <select id="getById" resultType="com.localexplorer.entity.OrderEventOutbox">
+        select * from order_event_outbox where id = #{id}
+    </select>
+
+    <select id="findReadyIds" resultType="long">
+        select id from order_event_outbox
+        where next_retry_at &lt;= #{now}
+          and (status = 'PENDING' or (status = 'PROCESSING' and locked_until &lt;= #{now}))
+        order by next_retry_at, id
+        limit #{limit}
+    </select>
+
+    <update id="claim">
+        update order_event_outbox
+        set status = 'PROCESSING', locked_until = #{lockedUntil}, lock_token = #{lockToken},
+            update_time = #{now}
+        where id = #{id} and next_retry_at &lt;= #{now}
+          and (status = 'PENDING' or (status = 'PROCESSING' and locked_until &lt;= #{now}))
+    </update>
+
+    <update id="markProcessed">
+        update order_event_outbox
+        set status = 'PROCESSED', processed_at = #{now}, locked_until = null,
+            lock_token = null, last_error = null, update_time = #{now}
+        where id = #{id} and status = 'PROCESSING' and lock_token = #{lockToken}
+    </update>
+
+    <update id="markRetry">
+        update order_event_outbox
+        set status = 'PENDING', retry_count = #{retryCount}, next_retry_at = #{nextRetryAt},
+            locked_until = null, lock_token = null, last_error = #{lastError}, update_time = #{now}
+        where id = #{id} and status = 'PROCESSING' and lock_token = #{lockToken}
+    </update>
+
+    <update id="markDead">
+        update order_event_outbox
+        set status = 'DEAD', retry_count = #{retryCount}, locked_until = null,
+            lock_token = null, last_error = #{lastError}, update_time = #{now}
+        where id = #{id} and status = 'PROCESSING' and lock_token = #{lockToken}
+    </update>
+
+    <update id="resetDead">
+        update order_event_outbox
+        set status = 'PENDING', retry_count = 0, next_retry_at = #{now}, locked_until = null,
+            lock_token = null, last_error = null, processed_at = null, update_time = #{now}
+        where id = #{id} and status = 'DEAD'
+    </update>
+
+    <select id="pageQuery" resultType="com.localexplorer.entity.OrderEventOutbox">
+        select * from order_event_outbox
+        <where>
+            <if test="status != null and status != ''">and status = #{status}</if>
+            <if test="eventType != null and eventType != ''">and event_type = #{eventType}</if>
+        </where>
+        order by create_time desc, id desc
+    </select>
+
+    <select id="stats" resultType="com.localexplorer.vo.OutboxStatsVO">
+        select
+          sum(case when status = 'PENDING' then 1 else 0 end) as pending,
+          sum(case when status = 'PROCESSING' then 1 else 0 end) as processing,
+          sum(case when status = 'PROCESSED' then 1 else 0 end) as processed,
+          sum(case when status = 'DEAD' then 1 else 0 end) as dead
+        from order_event_outbox
+    </select>
+
+    <select id="countDead" resultType="long">
+        select count(*) from order_event_outbox where status = 'DEAD'
+    </select>
+</mapper>

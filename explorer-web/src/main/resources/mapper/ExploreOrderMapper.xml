@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.localexplorer.mapper.ExploreOrderMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into explore_order (user_id, order_no, order_type, item_id, package_id, item_name,
+            amount, people_count, contact_name, contact_phone, reserve_time, request_id, expire_at,
+            cancel_type, cancel_reason, remark, status, create_time, update_time)
+        values (#{userId}, #{orderNo}, #{orderType}, #{itemId}, #{packageId}, #{itemName},
+            #{amount}, #{peopleCount}, #{contactName}, #{contactPhone}, #{reserveTime}, #{requestId}, #{expireAt},
+            #{cancelType}, #{cancelReason}, #{remark}, #{status}, #{createTime}, #{updateTime})
+    </insert>
+
+    <select id="pageQuery" resultType="com.localexplorer.vo.ExploreOrderVO">
+        select o.*, u.name as userName,
+            exists(select 1 from review r where r.order_id = o.id) as has_review
+        from explore_order o
+        left join user u on o.user_id = u.id
+        <where>
+            <if test="keyword != null and keyword != ''">
+                and (
+                    o.order_no like concat('%',#{keyword},'%')
+                    or o.item_name like concat('%',#{keyword},'%')
+                    or u.name like concat('%',#{keyword},'%')
+                    or o.contact_name like concat('%',#{keyword},'%')
+                    or o.contact_phone like concat('%',#{keyword},'%')
+                )
+            </if>
+            <if test="orderNo != null and orderNo != ''">
+                and o.order_no like concat('%',#{orderNo},'%')
+            </if>
+            <if test="contactName != null and contactName != ''">
+                and o.contact_name like concat('%',#{contactName},'%')
+            </if>
+            <if test="status != null">
+                and o.status = #{status}
+            </if>
+            <if test="orderType != null">
+                and o.order_type = #{orderType}
+            </if>
+            <if test="userId != null">
+                and o.user_id = #{userId}
+            </if>
+        </where>
+        order by o.create_time desc
+    </select>
+
+    <update id="update">
+        update explore_order
+        <set>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="contactName != null">contact_name = #{contactName},</if>
+            <if test="contactPhone != null">contact_phone = #{contactPhone},</if>
+            <if test="reserveTime != null">reserve_time = #{reserveTime},</if>
+            <if test="requestId != null">request_id = #{requestId},</if>
+            <if test="peopleCount != null">people_count = #{peopleCount},</if>
+            <if test="expireAt != null">expire_at = #{expireAt},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+        </set>
+        where id = #{id}
+    </update>
+
+    <select id="countByItemIds" resultType="long">
+        select count(*) from explore_order where item_id in
+        <foreach collection="itemIds" item="itemId" open="(" close=")" separator=",">
+            #{itemId}
+        </foreach>
+    </select>
+
+    <select id="countByPackageIds" resultType="long">
+        select count(*) from explore_order where package_id in
+        <foreach collection="packageIds" item="packageId" open="(" close=")" separator=",">
+            #{packageId}
+        </foreach>
+    </select>
+
+    <select id="countByDate" resultType="map">
+        select date(create_time) as date, count(*) as count from explore_order
+        where create_time >= date_sub(curdate(), interval #{days} day)
+        group by date(create_time)
+        order by date(create_time)
+    </select>
+
+    <sql id="exportFilters">
+        <if test="keyword != null and keyword != ''">
+            and (o.order_no like concat('%',#{keyword},'%') or o.item_name like concat('%',#{keyword},'%')
+                or u.name like concat('%',#{keyword},'%') or o.contact_name like concat('%',#{keyword},'%')
+                or o.contact_phone like concat('%',#{keyword},'%'))
+        </if>
+        <if test="orderNo != null and orderNo != ''">and o.order_no like concat('%',#{orderNo},'%')</if>
+        <if test="contactName != null and contactName != ''">and o.contact_name like concat('%',#{contactName},'%')</if>
+        <if test="dataStatus != null">and o.status = #{dataStatus}</if>
+        <if test="orderType != null">and o.order_type = #{orderType}</if>
+        <if test="userId != null">and o.user_id = #{userId}</if>
+        <if test="startTime != null">and o.create_time &gt;= #{startTime}</if>
+        <if test="endTime != null">and o.create_time &lt;= #{endTime}</if>
+    </sql>
+
+    <select id="findMaxIdForExport" resultType="long">
+        select max(o.id) from explore_order o left join user u on o.user_id = u.id
+        <where><include refid="exportFilters"/></where>
+    </select>
+
+    <select id="countForExport" resultType="long">
+        select count(*) from explore_order o left join user u on o.user_id = u.id
+        <where>
+            o.id &lt;= #{maxId}
+            <include refid="exportFilters"/>
+        </where>
+    </select>
+
+    <select id="findExportChunk" resultType="com.localexplorer.vo.ExploreOrderVO">
+        select o.id, o.order_no, o.order_type, o.item_name, o.amount, o.people_count,
+               o.contact_name, o.contact_phone, o.reserve_time, o.status, o.create_time, u.name as user_name
+        from explore_order o left join user u on o.user_id = u.id
+        <where>
+            o.id &gt; #{lastId} and o.id &lt;= #{snapshot.maxId}
+            <if test="snapshot.keyword != null and snapshot.keyword != ''">
+                and (o.order_no like concat('%',#{snapshot.keyword},'%') or o.item_name like concat('%',#{snapshot.keyword},'%')
+                    or u.name like concat('%',#{snapshot.keyword},'%') or o.contact_name like concat('%',#{snapshot.keyword},'%')
+                    or o.contact_phone like concat('%',#{snapshot.keyword},'%'))
+            </if>
+            <if test="snapshot.orderNo != null and snapshot.orderNo != ''">and o.order_no like concat('%',#{snapshot.orderNo},'%')</if>
+            <if test="snapshot.contactName != null and snapshot.contactName != ''">and o.contact_name like concat('%',#{snapshot.contactName},'%')</if>
+            <if test="snapshot.dataStatus != null">and o.status = #{snapshot.dataStatus}</if>
+            <if test="snapshot.orderType != null">and o.order_type = #{snapshot.orderType}</if>
+            <if test="snapshot.userId != null">and o.user_id = #{snapshot.userId}</if>
+            <if test="snapshot.startTime != null">and o.create_time &gt;= #{snapshot.startTime}</if>
+            <if test="snapshot.endTime != null">and o.create_time &lt;= #{snapshot.endTime}</if>
+        </where>
+        order by o.id
+        limit #{limit}
+    </select>
+</mapper>

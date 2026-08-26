@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.localexplorer.mapper.LoginGuardMapper">
+    <insert id="upsertFailure">
+        insert into login_guard
+        (principal_type, account_hash, ip_hash, account_hint, failed_count, window_started_at,
+         locked_until, last_failed_at, create_time, update_time)
+        values (#{guard.principalType}, #{guard.accountHash}, #{guard.ipHash}, #{guard.accountHint}, 1,
+         #{guard.windowStartedAt},
+         if(#{failureLimit} &lt;= 1, #{lockUntil}, null), #{guard.lastFailedAt}, #{guard.createTime}, #{guard.updateTime})
+        on duplicate key update
+          account_hint = values(account_hint),
+          failed_count = if(window_started_at &lt;= #{windowCutoff}, 1, failed_count + 1),
+          window_started_at = if(window_started_at &lt;= #{windowCutoff}, values(window_started_at), window_started_at),
+          locked_until = if(failed_count &gt;= #{failureLimit}, #{lockUntil},
+                            if(locked_until is not null and locked_until &gt; values(last_failed_at), locked_until, null)),
+          last_failed_at = values(last_failed_at),
+          update_time = values(update_time)
+    </insert>
+    <select id="find" resultType="com.localexplorer.entity.LoginGuard">
+        select * from login_guard where principal_type=#{principalType} and account_hash=#{accountHash} and ip_hash=#{ipHash}
+    </select>
+    <delete id="deleteByKey">
+        delete from login_guard where principal_type=#{principalType} and account_hash=#{accountHash} and ip_hash=#{ipHash}
+    </delete>
+    <delete id="deleteById">delete from login_guard where id=#{id}</delete>
+    <select id="getById" resultType="com.localexplorer.entity.LoginGuard">select * from login_guard where id=#{id}</select>
+    <select id="pageLocked" resultType="com.localexplorer.entity.LoginGuard">
+        select id, principal_type, account_hint, failed_count, locked_until, last_failed_at, create_time, update_time
+        from login_guard where locked_until &gt; now()
+        <if test="principalType != null and principalType != ''">and principal_type=#{principalType}</if>
+        order by locked_until desc
+    </select>
+</mapper>

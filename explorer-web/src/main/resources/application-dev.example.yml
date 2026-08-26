@@ -1,0 +1,28 @@
+explorer:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    host: ${DB_HOST:localhost}
+    port: ${DB_PORT:3306}
+    database: ${DB_NAME:local_explorer}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:1234}
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    database: ${REDIS_DATABASE:10}
+  auth:
+    refresh-ttl-millis: ${AUTH_REFRESH_TTL_MILLIS:604800000}
+    admin-cookie-name: ${AUTH_ADMIN_COOKIE_NAME:LX_ADMIN_REFRESH}
+    user-cookie-name: ${AUTH_USER_COOKIE_NAME:LX_USER_REFRESH}
+    cookie-secure: ${AUTH_COOKIE_SECURE:false}
+    fingerprint-secret: ${AUTH_FINGERPRINT_SECRET:replace-with-a-long-random-secret}
+    trusted-proxy-enabled: ${AUTH_TRUSTED_PROXY_ENABLED:false}
+    allowed-origins: ${AUTH_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+    login-failure-limit: ${AUTH_LOGIN_FAILURE_LIMIT:5}
+    login-window-seconds: ${AUTH_LOGIN_WINDOW_SECONDS:600}
+    login-lock-seconds: ${AUTH_LOGIN_LOCK_SECONDS:900}
+    cleanup-batch-size: ${AUTH_CLEANUP_BATCH_SIZE:200}
+    retention-days: ${AUTH_SESSION_RETENTION_DAYS:30}
+    replay-grace-millis: ${AUTH_REPLAY_GRACE_MILLIS:2000}
+  jobs:
+    auth-session-cleanup-delay-ms: ${AUTH_SESSION_CLEANUP_DELAY_MS:3600000}

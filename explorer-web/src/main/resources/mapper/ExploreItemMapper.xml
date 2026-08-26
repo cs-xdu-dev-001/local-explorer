@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.localexplorer.mapper.ExploreItemMapper">
+
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into explore_item (name, category_id, price, image, description, duration_minutes, capacity, booked, district, address, meeting_point, cancel_policy, status, create_time, update_time, create_user, update_user)
+            values
+        (#{name},#{categoryId},#{price},#{image},#{description},#{durationMinutes},#{capacity},#{booked},#{district},#{address},#{meetingPoint},#{cancelPolicy},#{status},#{createTime},#{updateTime},#{createUser},#{updateUser})
+    </insert>
+
+    <delete id="deleteByIds">
+        delete from explore_item where id in
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+    </delete>
+    <select id="pageQuery" resultType="com.localexplorer.vo.ExploreItemVO">
+        select i.*, c.name as categoryName from explore_item i left outer join category c on i.category_id = c.id
+        <where>
+            <if test="name != null">
+                and i.name like concat('%',#{name},'%')
+            </if>
+            <if test="categoryId != null">
+                and i.category_id = #{categoryId}
+            </if>
+            <if test="status != null">
+                and i.status = #{status}
+            </if>
+        </where>
+        order by i.create_time desc
+    </select>
+
+    <select id="listByIds" resultType="ExploreItem">
+        select * from explore_item where id in
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+    </select>
+
+    <update id="update">
+        update explore_item
+        <set>
+            <if test="name != null">name = #{name},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="categoryId != null">category_id = #{categoryId},</if>
+            <if test="price != null">price = #{price},</if>
+            <if test="image != null">image = #{image},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="durationMinutes != null">duration_minutes = #{durationMinutes},</if>
+            <if test="capacity != null">capacity = #{capacity},</if>
+            <if test="booked != null">booked = #{booked},</if>
+            <if test="district != null">district = #{district},</if>
+            <if test="address != null">address = #{address},</if>
+            <if test="meetingPoint != null">meeting_point = #{meetingPoint},</if>
+            <if test="cancelPolicy != null">cancel_policy = #{cancelPolicy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="updateUser != null">update_user = #{updateUser},</if>
+        </set>
+        where id = #{id}
+    </update>
+    <select id="list" resultType="ExploreItem" parameterType="ExploreItem">
+        select * from explore_item
+        <where>
+            <if test="name != null">
+                and name like concat('%',#{name},'%')
+            </if>
+            <if test="categoryId != null">
+                and category_id = #{categoryId}
+            </if>
+            <if test="status != null">
+                and status = #{status}
+            </if>
+        </where>
+        order by create_time desc
+    </select>
+</mapper>

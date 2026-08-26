@@ -1,0 +1,11 @@
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+explorer:
+  auth:
+    cookie-secure: ${AUTH_COOKIE_SECURE:true}
+  jobs:
+    enabled: true

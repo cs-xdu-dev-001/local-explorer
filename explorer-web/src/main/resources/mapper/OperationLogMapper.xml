@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.localexplorer.mapper.OperationLogMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into operation_log (description, operator_id, request_method, request_uri, client_ip, cost_time, create_time)
+        values (#{description}, #{operatorId}, #{requestMethod}, #{requestUri}, #{clientIp}, #{costTime}, #{createTime})
+    </insert>
+
+    <select id="pageQuery" resultType="com.localexplorer.vo.OperationLogVO">
+        select ol.*, e.name as operatorName
+        from operation_log ol
+        left join employee e on ol.operator_id = e.id
+        <where>
+            <if test="description != null and description != ''">
+                and ol.description like concat('%',#{description},'%')
+            </if>
+            <if test="keyword != null and keyword != ''">
+                and (
+                    ol.description like concat('%',#{keyword},'%')
+                    or e.name like concat('%',#{keyword},'%')
+                    or ol.request_uri like concat('%',#{keyword},'%')
+                    or ol.client_ip like concat('%',#{keyword},'%')
+                )
+            </if>
+            <if test="operatorId != null">
+                and ol.operator_id = #{operatorId}
+            </if>
+            <if test="requestMethod != null and requestMethod != ''">
+                and ol.request_method = #{requestMethod}
+            </if>
+        </where>
+        order by ol.create_time desc
+    </select>
+
+    <sql id="exportFilters">
+        <if test="description != null and description != ''">and ol.description like concat('%',#{description},'%')</if>
+        <if test="keyword != null and keyword != ''">
+            and (ol.description like concat('%',#{keyword},'%') or e.name like concat('%',#{keyword},'%')
+                or ol.request_uri like concat('%',#{keyword},'%'))
+        </if>
+        <if test="operatorId != null">and ol.operator_id = #{operatorId}</if>
+        <if test="requestMethod != null and requestMethod != ''">and ol.request_method = #{requestMethod}</if>
+        <if test="startTime != null">and ol.create_time &gt;= #{startTime}</if>
+        <if test="endTime != null">and ol.create_time &lt;= #{endTime}</if>
+    </sql>
+
+    <select id="findMaxIdForExport" resultType="long">
+        select max(ol.id) from operation_log ol left join employee e on ol.operator_id = e.id
+        <where><include refid="exportFilters"/></where>
+    </select>
+
+    <select id="countForExport" resultType="long">
+        select count(*) from operation_log ol left join employee e on ol.operator_id = e.id
+        <where>ol.id &lt;= #{maxId}<include refid="exportFilters"/></where>
+    </select>
+
+    <select id="findExportChunk" resultType="com.localexplorer.vo.OperationLogVO">
+        select ol.id, ol.description, ol.operator_id, ol.request_method, ol.request_uri,
+               ol.cost_time, ol.create_time, e.name as operator_name
+        from operation_log ol left join employee e on ol.operator_id = e.id
+        <where>
+            ol.id &gt; #{lastId} and ol.id &lt;= #{snapshot.maxId}
+            <if test="snapshot.description != null and snapshot.description != ''">and ol.description like concat('%',#{snapshot.description},'%')</if>
+            <if test="snapshot.keyword != null and snapshot.keyword != ''">
+                and (ol.description like concat('%',#{snapshot.keyword},'%') or e.name like concat('%',#{snapshot.keyword},'%')
+                    or ol.request_uri like concat('%',#{snapshot.keyword},'%'))
+            </if>
+            <if test="snapshot.operatorId != null">and ol.operator_id = #{snapshot.operatorId}</if>
+            <if test="snapshot.requestMethod != null and snapshot.requestMethod != ''">and ol.request_method = #{snapshot.requestMethod}</if>
+            <if test="snapshot.startTime != null">and ol.create_time &gt;= #{snapshot.startTime}</if>
+            <if test="snapshot.endTime != null">and ol.create_time &lt;= #{snapshot.endTime}</if>
+        </where>
+        order by ol.id
+        limit #{limit}
+    </select>
+</mapper>
